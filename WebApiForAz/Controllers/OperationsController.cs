@@ -48,9 +48,9 @@ namespace WebApiForAz.Controllers
                 operations = await _operationRepository.GetAllByUserAsync(userId);
             }
 
-            if (operations == null || !operations.Any())
+            if (operations == null)
             {
-                return NotFound();
+                return Ok(new List<Operation>());
             }
 
             return Ok(operations.ToList());

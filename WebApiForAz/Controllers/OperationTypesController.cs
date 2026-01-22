@@ -51,9 +51,9 @@ namespace WebApiForAz.Controllers
                 operationTypes = await _operationTypeRepository.GetAllByUserAsync(userId);
             }
 
-            if (operationTypes == null || !operationTypes.Any())
+            if (operationTypes == null)
             {
-                return NotFound();
+                return Ok(new List<OperationType>());
             }
 
             return Ok(operationTypes.ToList());
