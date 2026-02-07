@@ -33,7 +33,7 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
 //var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-var connectionString = builder.Configuration.GetValue<string>("DATABASE_URL") 
+var connectionString = builder.Configuration.GetValue<string>("DATABASE_URL")
     ?? builder.Configuration.GetConnectionString("DefaultConnection");
 
 builder.Services.AddDbContext<SfmbDbContext>(options =>
@@ -48,6 +48,10 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     options.Password.RequireNonAlphanumeric = false;
     options.Password.RequiredLength = 6;
     options.User.RequireUniqueEmail = true;
+
+    options.Lockout.AllowedForNewUsers = true;
+    options.Lockout.MaxFailedAccessAttempts = 5;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
 })
 .AddRoles<IdentityRole>()
 .AddEntityFrameworkStores<SfmbDbContext>()
@@ -101,7 +105,7 @@ builder.Services.AddSwaggerGen(c =>
         Title = "SFM API",
         Version = "v1"
     });
-    
+
     // Add JWT authentication to Swagger
     c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {

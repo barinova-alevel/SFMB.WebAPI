@@ -29,11 +29,19 @@ namespace SFMB.BL.Services
                 return null;
             }
 
-            var isPasswordValid = await _userManager.CheckPasswordAsync(user, loginDto.Password);
-            if (!isPasswordValid)
+            if (await _userManager.IsLockedOutAsync(user))
             {
                 return null;
             }
+
+            var isPasswordValid = await _userManager.CheckPasswordAsync(user, loginDto.Password);
+            if (!isPasswordValid)
+            {
+                await _userManager.AccessFailedAsync(user);
+                return null;
+            }
+
+            await _userManager.ResetAccessFailedCountAsync(user);
 
             var roles = await _userManager.GetRolesAsync(user);
             var token = GenerateJwtToken(user, roles);
@@ -92,7 +100,7 @@ namespace SFMB.BL.Services
             var jwtAudience = _configuration["Jwt:Audience"];
             var jwtExpiryHours = _configuration["Jwt:ExpiryInHours"];
 
-            if (string.IsNullOrEmpty(jwtKey) || string.IsNullOrEmpty(jwtIssuer) || 
+            if (string.IsNullOrEmpty(jwtKey) || string.IsNullOrEmpty(jwtIssuer) ||
                 string.IsNullOrEmpty(jwtAudience) || string.IsNullOrEmpty(jwtExpiryHours))
             {
                 throw new InvalidOperationException("JWT configuration is incomplete");
