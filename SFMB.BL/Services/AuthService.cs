@@ -13,11 +13,16 @@ namespace SFMB.BL.Services
     public class AuthService : IAuthService
     {
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IConfiguration _configuration;
 
-        public AuthService(UserManager<ApplicationUser> userManager, IConfiguration configuration)
+        public AuthService(
+            UserManager<ApplicationUser> userManager,
+            SignInManager<ApplicationUser> signInManager,
+            IConfiguration configuration)
         {
             _userManager = userManager;
+            _signInManager = signInManager;
             _configuration = configuration;
         }
 
@@ -29,19 +34,16 @@ namespace SFMB.BL.Services
                 return null;
             }
 
-            if (await _userManager.IsLockedOutAsync(user))
+            // lockout policy configuration:
+            var signInResult = await _signInManager.CheckPasswordSignInAsync(
+                user,
+                loginDto.Password,
+                lockoutOnFailure: true);
+
+            if (!signInResult.Succeeded)
             {
                 return null;
             }
-
-            var isPasswordValid = await _userManager.CheckPasswordAsync(user, loginDto.Password);
-            if (!isPasswordValid)
-            {
-                await _userManager.AccessFailedAsync(user);
-                return null;
-            }
-
-            await _userManager.ResetAccessFailedCountAsync(user);
 
             var roles = await _userManager.GetRolesAsync(user);
             var token = GenerateJwtToken(user, roles);
@@ -78,7 +80,6 @@ namespace SFMB.BL.Services
                 return null;
             }
 
-            // Assign default User role
             await _userManager.AddToRoleAsync(user, "User");
 
             var roles = await _userManager.GetRolesAsync(user);
