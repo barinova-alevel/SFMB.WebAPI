@@ -1,5 +1,9 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using SFMB.BL.Dtos;
 using SFMB.BL.Services;
@@ -11,6 +15,7 @@ namespace SFMB.Tests
     public class AuthServiceTests
     {
         private readonly Mock<UserManager<ApplicationUser>> _userManagerMock;
+        private readonly Mock<SignInManager<ApplicationUser>> _signInManagerMock;
         private readonly Mock<IConfiguration> _configurationMock;
         private readonly AuthService _authService;
 
@@ -20,7 +25,16 @@ namespace SFMB.Tests
             var userStoreMock = new Mock<IUserStore<ApplicationUser>>();
             _userManagerMock = new Mock<UserManager<ApplicationUser>>(
                 userStoreMock.Object,
-                null, null, null, null, null, null, null, null);
+                null!, null!, null!, null!, null!, null!, null!, null!);
+
+            // Setup SignInManager mock (Identity 2.2 ctor used via SFMB.BL package reference)
+            _signInManagerMock = new Mock<SignInManager<ApplicationUser>>(
+                _userManagerMock.Object,
+                Mock.Of<IHttpContextAccessor>(),
+                Mock.Of<IUserClaimsPrincipalFactory<ApplicationUser>>(),
+                Mock.Of<IOptions<IdentityOptions>>(),
+                Mock.Of<ILogger<SignInManager<ApplicationUser>>>(),
+                Mock.Of<IAuthenticationSchemeProvider>());
 
             // Setup Configuration mock
             _configurationMock = new Mock<IConfiguration>();
@@ -29,7 +43,10 @@ namespace SFMB.Tests
             _configurationMock.Setup(c => c["Jwt:Audience"]).Returns("SFMBApi");
             _configurationMock.Setup(c => c["Jwt:ExpiryInHours"]).Returns("24");
 
-            _authService = new AuthService(_userManagerMock.Object, _configurationMock.Object);
+            _authService = new AuthService(
+                _userManagerMock.Object,
+                _signInManagerMock.Object,
+                _configurationMock.Object);
         }
 
         [Fact]
@@ -53,8 +70,8 @@ namespace SFMB.Tests
 
             _userManagerMock.Setup(um => um.FindByEmailAsync(loginDto.Email))
                 .ReturnsAsync(user);
-            _userManagerMock.Setup(um => um.CheckPasswordAsync(user, loginDto.Password))
-                .ReturnsAsync(true);
+            _signInManagerMock.Setup(sm => sm.CheckPasswordSignInAsync(user, loginDto.Password, true))
+                .ReturnsAsync(SignInResult.Success);
             _userManagerMock.Setup(um => um.GetRolesAsync(user))
                 .ReturnsAsync(new List<string> { "User" });
 
@@ -108,8 +125,8 @@ namespace SFMB.Tests
 
             _userManagerMock.Setup(um => um.FindByEmailAsync(loginDto.Email))
                 .ReturnsAsync(user);
-            _userManagerMock.Setup(um => um.CheckPasswordAsync(user, loginDto.Password))
-                .ReturnsAsync(false);
+            _signInManagerMock.Setup(sm => sm.CheckPasswordSignInAsync(user, loginDto.Password, true))
+                .ReturnsAsync(SignInResult.Failed);
 
             // Act
             var result = await _authService.LoginAsync(loginDto);
