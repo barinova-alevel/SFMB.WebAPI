@@ -45,6 +45,7 @@ The system seeds three default users on startup:
 | admin@sfmb.com | Admin123! | Admin | Admin User |
 | user1@sfmb.com | User123! | User | John Doe |
 | user2@sfmb.com | User123! | User | Jane Smith |
+| demo@user.com | Demo12! | User |  |
 
 ### Database Changes
 
