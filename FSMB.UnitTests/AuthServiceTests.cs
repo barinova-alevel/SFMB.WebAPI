@@ -16,6 +16,7 @@ namespace SFMB.Tests
     {
         private readonly Mock<UserManager<ApplicationUser>> _userManagerMock;
         private readonly Mock<SignInManager<ApplicationUser>> _signInManagerMock;
+        private readonly Mock<RoleManager<IdentityRole>> _roleManagerMock;
         private readonly Mock<IConfiguration> _configurationMock;
         private readonly AuthService _authService;
 
@@ -36,6 +37,11 @@ namespace SFMB.Tests
                 Mock.Of<ILogger<SignInManager<ApplicationUser>>>(),
                 Mock.Of<IAuthenticationSchemeProvider>());
 
+            var roleStoreMock = new Mock<IRoleStore<IdentityRole>>();
+            _roleManagerMock = new Mock<RoleManager<IdentityRole>>(
+                roleStoreMock.Object,
+                null!, null!, null!, null!);
+
             // Setup Configuration mock
             _configurationMock = new Mock<IConfiguration>();
             _configurationMock.Setup(c => c["Jwt:Key"]).Returns("YourSuperSecretKeyForJWTTokenGenerationThatIsAtLeast32CharactersLong");
@@ -46,6 +52,7 @@ namespace SFMB.Tests
             _authService = new AuthService(
                 _userManagerMock.Object,
                 _signInManagerMock.Object,
+                _roleManagerMock.Object,
                 _configurationMock.Object);
         }
 
@@ -222,6 +229,71 @@ namespace SFMB.Tests
             // Assert
             Assert.Null(result);
             _userManagerMock.Verify(um => um.AddToRoleAsync(It.IsAny<ApplicationUser>(), It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task GetDemoCredentialsAsync_WhenPasswordMissing_ReturnsNull()
+        {
+            _configurationMock.Setup(c => c["DemoUser:Password"]).Returns((string?)null);
+
+            var result = await _authService.GetDemoCredentialsAsync();
+
+            Assert.Null(result);
+            _userManagerMock.Verify(um => um.FindByEmailAsync(It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task GetDemoCredentialsAsync_WhenUserMissing_CreatesDemoUser()
+        {
+            _configurationMock.Setup(c => c["DemoUser:Password"]).Returns("DemoPass1");
+            _configurationMock.Setup(c => c["DemoUser:Email"]).Returns((string?)null);
+            _roleManagerMock.Setup(rm => rm.RoleExistsAsync("User")).ReturnsAsync(true);
+            _userManagerMock.Setup(um => um.FindByEmailAsync(AuthService.DefaultDemoEmail))
+                .ReturnsAsync((ApplicationUser?)null);
+            _userManagerMock.Setup(um => um.CreateAsync(It.IsAny<ApplicationUser>(), "DemoPass1"))
+                .ReturnsAsync(IdentityResult.Success);
+            _userManagerMock.Setup(um => um.IsLockedOutAsync(It.IsAny<ApplicationUser>()))
+                .ReturnsAsync(false);
+            _userManagerMock.Setup(um => um.IsInRoleAsync(It.IsAny<ApplicationUser>(), "User"))
+                .ReturnsAsync(false);
+            _userManagerMock.Setup(um => um.AddToRoleAsync(It.IsAny<ApplicationUser>(), "User"))
+                .ReturnsAsync(IdentityResult.Success);
+
+            var result = await _authService.GetDemoCredentialsAsync();
+
+            Assert.NotNull(result);
+            Assert.Equal(AuthService.DefaultDemoEmail, result.Email);
+            Assert.Equal("DemoPass1", result.Password);
+            _userManagerMock.Verify(um => um.CreateAsync(It.IsAny<ApplicationUser>(), "DemoPass1"), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetDemoCredentialsAsync_WhenPasswordDiffers_ResetsDemoPassword()
+        {
+            var user = new ApplicationUser
+            {
+                Id = "demo-id",
+                Email = "demo@goldfish.app",
+                UserName = "demo@goldfish.app"
+            };
+
+            _configurationMock.Setup(c => c["DemoUser:Password"]).Returns("DemoPass1");
+            _configurationMock.Setup(c => c["DemoUser:Email"]).Returns("demo@goldfish.app");
+            _roleManagerMock.Setup(rm => rm.RoleExistsAsync("User")).ReturnsAsync(true);
+            _userManagerMock.Setup(um => um.FindByEmailAsync("demo@goldfish.app")).ReturnsAsync(user);
+            _userManagerMock.Setup(um => um.CheckPasswordAsync(user, "DemoPass1")).ReturnsAsync(false);
+            _userManagerMock.Setup(um => um.GeneratePasswordResetTokenAsync(user)).ReturnsAsync("reset-token");
+            _userManagerMock.Setup(um => um.ResetPasswordAsync(user, "reset-token", "DemoPass1"))
+                .ReturnsAsync(IdentityResult.Success);
+            _userManagerMock.Setup(um => um.IsLockedOutAsync(user)).ReturnsAsync(false);
+            _userManagerMock.Setup(um => um.IsInRoleAsync(user, "User")).ReturnsAsync(true);
+
+            var result = await _authService.GetDemoCredentialsAsync();
+
+            Assert.NotNull(result);
+            Assert.Equal("demo@goldfish.app", result.Email);
+            _userManagerMock.Verify(um => um.ResetPasswordAsync(user, "reset-token", "DemoPass1"), Times.Once);
+            _userManagerMock.Verify(um => um.CreateAsync(It.IsAny<ApplicationUser>(), It.IsAny<string>()), Times.Never);
         }
     }
 }

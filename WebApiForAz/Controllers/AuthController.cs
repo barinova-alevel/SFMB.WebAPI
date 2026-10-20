@@ -16,6 +16,23 @@ namespace WebApiForAz.Controllers
         }
 
         /// <summary>
+        /// Demo sign-in credentials for one-click login.
+        /// The password comes from DemoUser:Password (environment variable DemoUser__Password).
+        /// It is not stored in source control. Returns 404 when that value is missing.
+        /// </summary>
+        [HttpGet("demo")]
+        public async Task<ActionResult<DemoCredentialsDto>> Demo()
+        {
+            var credentials = await _authService.GetDemoCredentialsAsync();
+            if (credentials == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(credentials);
+        }
+
+        /// <summary>
         /// Login to get JWT token
         /// </summary>
         [HttpPost("login")]

@@ -12,17 +12,22 @@ namespace SFMB.BL.Services
 {
     public class AuthService : IAuthService
     {
+        public const string DefaultDemoEmail = "demo@goldfish.app";
+
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IConfiguration _configuration;
 
         public AuthService(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
+            RoleManager<IdentityRole> roleManager,
             IConfiguration configuration)
         {
             _userManager = userManager;
             _signInManager = signInManager;
+            _roleManager = roleManager;
             _configuration = configuration;
         }
 
@@ -92,6 +97,87 @@ namespace SFMB.BL.Services
                 UserId = user.Id,
                 Role = roles.FirstOrDefault() ?? "User"
             };
+        }
+
+        public async Task<DemoCredentialsDto?> GetDemoCredentialsAsync()
+        {
+            var password = _configuration["DemoUser:Password"];
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                return null;
+            }
+
+            var email = _configuration["DemoUser:Email"];
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                email = DefaultDemoEmail;
+            }
+
+            email = email.Trim();
+            password = password.Trim();
+            await EnsureDemoUserAsync(email, password);
+
+            return new DemoCredentialsDto
+            {
+                Email = email,
+                Password = password
+            };
+        }
+
+        private async Task EnsureDemoUserAsync(string email, string password)
+        {
+            if (!await _roleManager.RoleExistsAsync("User"))
+            {
+                var roleResult = await _roleManager.CreateAsync(new IdentityRole("User"));
+                if (!roleResult.Succeeded)
+                {
+                    throw new InvalidOperationException("Could not create the User role for the demo account.");
+                }
+            }
+
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null)
+            {
+                user = new ApplicationUser
+                {
+                    Email = email,
+                    UserName = email,
+                    FirstName = "Demo",
+                    LastName = "User",
+                    EmailConfirmed = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                var createResult = await _userManager.CreateAsync(user, password);
+                if (!createResult.Succeeded)
+                {
+                    throw new InvalidOperationException("Could not create the demo account.");
+                }
+            }
+            else if (!await _userManager.CheckPasswordAsync(user, password))
+            {
+                var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+                var resetResult = await _userManager.ResetPasswordAsync(user, resetToken, password);
+                if (!resetResult.Succeeded)
+                {
+                    throw new InvalidOperationException("Could not update the demo account password.");
+                }
+            }
+
+            if (await _userManager.IsLockedOutAsync(user))
+            {
+                await _userManager.SetLockoutEndDateAsync(user, null);
+                await _userManager.ResetAccessFailedCountAsync(user);
+            }
+
+            if (!await _userManager.IsInRoleAsync(user, "User"))
+            {
+                var addRoleResult = await _userManager.AddToRoleAsync(user, "User");
+                if (!addRoleResult.Succeeded)
+                {
+                    throw new InvalidOperationException("Could not assign the User role to the demo account.");
+                }
+            }
         }
 
         private string GenerateJwtToken(ApplicationUser user, IList<string> roles)

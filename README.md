@@ -45,7 +45,7 @@ The system seeds three default users on startup:
 | admin@sfmb.com | Admin123! | Admin | Admin User |
 | user1@sfmb.com | User123! | User | John Doe |
 | user2@sfmb.com | User123! | User | Jane Smith |
-| demo@user.com | Demo12! | User |  |
+| demo@goldfish.app | `DemoUser__Password` | User | Demo User |
 
 ### Database Changes
 
@@ -76,7 +76,10 @@ The following changes were made to support authentication:
 ```
 POST /api/Auth/login
 POST /api/Auth/register
+GET  /api/Auth/demo
 ```
+
+`GET /api/Auth/demo` returns the demo account email and password for the one-click login button. It responds with 404 until `DemoUser__Password` is set. The password is not stored in source control. `DemoUser__Email` is optional and defaults to `demo@goldfish.app`.
 
 #### Operation Endpoints (Requires authentication)
 
@@ -198,6 +201,8 @@ Jwt__Key=your-secure-jwt-key
 Jwt__Issuer=SFMBApi
 Jwt__Audience=SFMBApi
 Jwt__ExpiryInHours=24
+DemoUser__Password=the-demo-account-password
+DemoUser__Email=demo@goldfish.app
 ```
 
 ### Security Features
